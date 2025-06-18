@@ -101,7 +101,7 @@ const Index = () => {
         {/* Header */}
         <div className="text-center mb-12 pt-12">
           <h1 className="text-5xl font-light text-slate-700 mb-4 tracking-wide">
-            Vestige
+            Relic
           </h1>
           <p className="text-lg text-slate-500 font-light max-w-2xl mx-auto leading-relaxed">
             {weeklyPrompt}
