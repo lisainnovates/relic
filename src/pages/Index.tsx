@@ -1,9 +1,9 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
-import { Upload, Mic, MicOff, Heart } from 'lucide-react';
+import { Upload, Mic, MicOff, Heart, Pin, PinOff, Play, Pause } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface Memory {
@@ -13,6 +13,7 @@ interface Memory {
   emotion: string;
   timestamp: Date;
   emotionColor: string;
+  isPinned?: boolean;
 }
 
 const emotions = [
@@ -23,6 +24,45 @@ const emotions = [
   { name: 'nostalgic', color: 'from-pink-200 to-rose-200', bg: 'bg-gradient-to-br from-pink-100 to-rose-100' },
 ];
 
+const AudioWaveform = ({ isPlaying }: { isPlaying: boolean }) => {
+  const bars = Array.from({ length: 8 }, (_, i) => i);
+  
+  return (
+    <div className="flex items-center justify-center gap-1 h-8">
+      {bars.map((bar) => (
+        <div
+          key={bar}
+          className={`w-1 bg-white/80 rounded-full transition-all duration-300 ${
+            isPlaying ? 'animate-pulse' : ''
+          }`}
+          style={{
+            height: isPlaying 
+              ? `${Math.random() * 20 + 8}px` 
+              : '8px',
+            animationDelay: `${bar * 100}ms`,
+            animationDuration: `${Math.random() * 500 + 800}ms`
+          }}
+        />
+      ))}
+    </div>
+  );
+};
+
+const getMemoryAge = (timestamp: Date): number => {
+  const now = new Date();
+  const diffInDays = (now.getTime() - timestamp.getTime()) / (1000 * 60 * 60 * 24);
+  return diffInDays;
+};
+
+const getAgeStyles = (age: number, isPinned: boolean) => {
+  if (isPinned) return { opacity: 1, saturate: 1 };
+  
+  if (age < 1) return { opacity: 1, saturate: 1 };
+  if (age < 7) return { opacity: 0.9, saturate: 0.9 };
+  if (age < 30) return { opacity: 0.8, saturate: 0.8 };
+  return { opacity: 0.7, saturate: 0.7 };
+};
+
 const Index = () => {
   const [memories, setMemories] = useState<Memory[]>([]);
   const [currentInput, setCurrentInput] = useState('');
@@ -30,10 +70,18 @@ const Index = () => {
   const [inputType, setInputType] = useState<'text' | 'image' | 'audio'>('text');
   const [isRecording, setIsRecording] = useState(false);
   const [hoveredMemory, setHoveredMemory] = useState<string | null>(null);
+  const [playingAudio, setPlayingAudio] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   const weeklyPrompt = "What would you like to remember that no one else will?";
+
+  // Sort memories: pinned first, then by date
+  const sortedMemories = [...memories].sort((a, b) => {
+    if (a.isPinned && !b.isPinned) return -1;
+    if (!a.isPinned && b.isPinned) return 1;
+    return b.timestamp.getTime() - a.timestamp.getTime();
+  });
 
   const handleAddMemory = () => {
     if (!currentInput.trim()) {
@@ -51,6 +99,7 @@ const Index = () => {
       emotion: selectedEmotion.name,
       emotionColor: selectedEmotion.color,
       timestamp: new Date(),
+      isPinned: false,
     };
 
     setMemories(prev => [newMemory, ...prev]);
@@ -60,6 +109,32 @@ const Index = () => {
       title: "Memory preserved",
       description: "Your moment has been gently saved.",
     });
+  };
+
+  const togglePin = (memoryId: string) => {
+    setMemories(prev => prev.map(memory => 
+      memory.id === memoryId 
+        ? { ...memory, isPinned: !memory.isPinned }
+        : memory
+    ));
+    
+    const memory = memories.find(m => m.id === memoryId);
+    toast({
+      title: memory?.isPinned ? "Memory unpinned" : "Memory pinned",
+      description: memory?.isPinned 
+        ? "Released back to the timeline" 
+        : "Held close as your talisman",
+    });
+  };
+
+  const toggleAudioPlayback = (memoryId: string) => {
+    if (playingAudio === memoryId) {
+      setPlayingAudio(null);
+    } else {
+      setPlayingAudio(memoryId);
+      // Simulate audio playback duration
+      setTimeout(() => setPlayingAudio(null), 3000);
+    }
   };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -159,8 +234,8 @@ const Index = () => {
 
             {inputType === 'audio' && isRecording && (
               <div className="text-center">
-                <div className="inline-block animate-pulse">
-                  <div className="w-4 h-4 bg-red-500 rounded-full"></div>
+                <div className="inline-block">
+                  <AudioWaveform isPlaying={true} />
                 </div>
                 <p className="text-slate-500 mt-2">Recording your voice...</p>
               </div>
@@ -205,55 +280,109 @@ const Index = () => {
             <h2 className="text-2xl font-light text-slate-700 text-center">Your Preserved Moments</h2>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {memories.map((memory, index) => (
-                <div
-                  key={memory.id}
-                  className="relative group cursor-pointer"
-                  onMouseEnter={() => setHoveredMemory(memory.id)}
-                  onMouseLeave={() => setHoveredMemory(null)}
-                  style={{ animationDelay: `${index * 100}ms` }}
-                >
+              {sortedMemories.map((memory, index) => {
+                const age = getMemoryAge(memory.timestamp);
+                const ageStyles = getAgeStyles(age, memory.isPinned || false);
+                
+                return (
                   <div
-                    className={`w-24 h-24 rounded-full bg-gradient-to-br ${memory.emotionColor} mx-auto mb-4 
-                      transition-all duration-500 transform group-hover:scale-110 shadow-lg
-                      ${hoveredMemory === memory.id ? 'animate-pulse' : ''}`}
+                    key={memory.id}
+                    className="relative group cursor-pointer"
+                    onMouseEnter={() => setHoveredMemory(memory.id)}
+                    onMouseLeave={() => setHoveredMemory(null)}
+                    style={{ 
+                      animationDelay: `${index * 100}ms`,
+                      opacity: ageStyles.opacity,
+                      filter: `saturate(${ageStyles.saturate})`
+                    }}
                   >
-                    <div className="w-full h-full rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                      <div className="w-3 h-3 bg-white/80 rounded-full"></div>
-                    </div>
-                  </div>
-                  
-                  {hoveredMemory === memory.id && (
-                    <Card className="absolute top-28 left-1/2 transform -translate-x-1/2 w-72 p-4 bg-white/95 backdrop-blur-sm border-0 shadow-xl z-10 animate-fade-in">
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-center">
-                          <span className={`px-3 py-1 rounded-full text-xs font-medium bg-gradient-to-r ${memory.emotionColor} text-slate-700`}>
-                            {memory.emotion}
-                          </span>
-                          <span className="text-xs text-slate-500">
-                            {memory.timestamp.toLocaleDateString()}
-                          </span>
+                    {/* Pin indicator for pinned memories */}
+                    {memory.isPinned && (
+                      <div className="absolute -top-2 -right-2 z-20">
+                        <div className="w-6 h-6 bg-amber-400 rounded-full flex items-center justify-center shadow-lg">
+                          <Pin className="w-3 h-3 text-amber-800" />
                         </div>
-                        
-                        {memory.type === 'text' && (
-                          <p className="text-sm text-slate-700 leading-relaxed">{memory.content}</p>
-                        )}
-                        
-                        {memory.type === 'image' && (
-                          <img src={memory.content} alt="Memory" className="w-full h-32 object-cover rounded-md" />
-                        )}
-                        
-                        {memory.type === 'audio' && (
-                          <div className="flex items-center gap-2 text-slate-600">
-                            <Mic className="w-4 h-4" />
-                            <span className="text-sm">Voice memory</span>
-                          </div>
+                      </div>
+                    )}
+                    
+                    <div
+                      className={`w-24 h-24 rounded-full bg-gradient-to-br ${memory.emotionColor} mx-auto mb-4 
+                        transition-all duration-500 transform group-hover:scale-110 shadow-lg
+                        ${hoveredMemory === memory.id ? 'animate-pulse' : ''}
+                        ${memory.isPinned ? 'ring-2 ring-amber-300 ring-opacity-50' : ''}`}
+                    >
+                      <div className="w-full h-full rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                        {memory.type === 'audio' ? (
+                          <AudioWaveform isPlaying={playingAudio === memory.id} />
+                        ) : (
+                          <div className="w-3 h-3 bg-white/80 rounded-full"></div>
                         )}
                       </div>
-                    </Card>
-                  )}
-                </div>
-              ))}
+                    </div>
+                    
+                    {hoveredMemory === memory.id && (
+                      <Card className="absolute top-28 left-1/2 transform -translate-x-1/2 w-72 p-4 bg-white/95 backdrop-blur-sm border-0 shadow-xl z-10 animate-fade-in">
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className={`px-3 py-1 rounded-full text-xs font-medium bg-gradient-to-r ${memory.emotionColor} text-slate-700`}>
+                              {memory.emotion}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  togglePin(memory.id);
+                                }}
+                                className="p-1 rounded-full hover:bg-slate-100 transition-colors"
+                                title={memory.isPinned ? "Unpin memory" : "Pin as talisman"}
+                              >
+                                {memory.isPinned ? (
+                                  <PinOff className="w-4 h-4 text-slate-600" />
+                                ) : (
+                                  <Pin className="w-4 h-4 text-slate-600" />
+                                )}
+                              </button>
+                              <span className="text-xs text-slate-500">
+                                {memory.timestamp.toLocaleDateString()}
+                              </span>
+                            </div>
+                          </div>
+                          
+                          {memory.type === 'text' && (
+                            <p className="text-sm text-slate-700 leading-relaxed">{memory.content}</p>
+                          )}
+                          
+                          {memory.type === 'image' && (
+                            <img src={memory.content} alt="Memory" className="w-full h-32 object-cover rounded-md" />
+                          )}
+                          
+                          {memory.type === 'audio' && (
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2 text-slate-600">
+                                <Mic className="w-4 h-4" />
+                                <span className="text-sm">Voice memory</span>
+                              </div>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleAudioPlayback(memory.id);
+                                }}
+                                className="p-2 rounded-full hover:bg-slate-100 transition-colors"
+                              >
+                                {playingAudio === memory.id ? (
+                                  <Pause className="w-4 h-4 text-slate-600" />
+                                ) : (
+                                  <Play className="w-4 h-4 text-slate-600" />
+                                )}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </Card>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
