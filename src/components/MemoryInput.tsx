@@ -1,9 +1,8 @@
-
 import React, { useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
-import { Upload, Mic, MicOff, Heart } from 'lucide-react';
+import { Upload, Mic, MicOff } from 'lucide-react';
 import AudioWaveform from './AudioWaveform';
 import { emotions, type Emotion } from '../types/memory';
 
@@ -120,7 +119,6 @@ const MemoryInput = ({
             onClick={onAddMemory}
             className="rounded-full px-8 py-6 text-lg bg-slate-700 hover:bg-slate-800 transition-all duration-300"
           >
-            <Heart className="w-5 h-5 mr-2" />
             Preserve This Moment
           </Button>
         </div>
